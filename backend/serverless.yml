@@ -3,6 +3,10 @@ service: amplify-upload-file
 provider:
   name: aws
   runtime: nodejs10.x
+  variableSyntax: "\\${{([\\s\\S]+?)}}"
+
+custom:
+  UPLOADED_S3_BUCKET_NAME: ${{self:service.name}}-uploadeds3bucket
 
 functions:
   hello:
@@ -20,7 +24,7 @@ resources:
     CognitoUserPool:
       Type: AWS::Cognito::UserPool
       Properties:
-        UserPoolName: ${self:service.name}_user_pool
+        UserPoolName: ${{self:service.name}}_user_pool
         AutoVerifiedAttributes:
           - email
         UsernameAttributes:
@@ -29,7 +33,7 @@ resources:
     CognitoUserPoolClient:
       Type: AWS::Cognito::UserPoolClient
       Properties:
-        ClientName: ${self:service.name}_client
+        ClientName: ${{self:service.name}}_client
         UserPoolId:
           Ref: CognitoUserPool
     # Cognito - Identity
@@ -57,7 +61,7 @@ resources:
     CognitoAuthRole:
       Type: AWS::IAM::Role
       Properties:
-        RoleName: ${self:service.name}_appAuthRole
+        RoleName: ${{self:service.name}}_appAuthRole
         Path: /
         AssumeRolePolicyDocument:
           Version: "2012-10-17"
@@ -88,10 +92,14 @@ resources:
                   Action:
                     - "execute-api:Invoke"
                   Resource: "*"
+                - Effect: "Allow"
+                  Action: 
+                    - "s3:*" 
+                  Resource: "arn:aws:s3:::${{self:custom.UPLOADED_S3_BUCKET_NAME}}/private/${cognito-identity.amazonaws.com:sub}/*"
     CognitoUnauthRole:
       Type: AWS::IAM::Role
       Properties:
-        RoleName: ${self:service.name}_appUnauthRole
+        RoleName: ${{self:service.name}}_appUnauthRole
         Path: /
         AssumeRolePolicyDocument:
           Version: "2012-10-17"
@@ -118,3 +126,24 @@ resources:
                     - "cognito-sync:*"
                     - "cognito-identity:*"
                   Resource: "*"
+    UploadedS3Bucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${{self:custom.UPLOADED_S3_BUCKET_NAME}}
+        CorsConfiguration:
+          CorsRules:
+          - AllowedHeaders: 
+              - '*'
+            AllowedMethods: 
+              - HEAD
+              - GET
+              - PUT
+              - POST
+              - DELETE
+            AllowedOrigins: 
+              - '*'
+            ExposedHeaders:
+              - x-amz-server-side-encryption
+              - x-amz-request-id
+              - x-amz-id-2
+            MaxAge: 3000
